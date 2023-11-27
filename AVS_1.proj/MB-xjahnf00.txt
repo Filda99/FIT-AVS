@@ -1,0 +1,41 @@
+#### Stručně odpovězte na následující otázky: ######
+
+
+1. Byla "Line" vektorizace časově efektivní? Proč?
+==============================================================================
+Výpočet Vektorizace Line byla časově mnohem rychlejší. To z toho důvodu, že se nepočítá 
+celá matice po bodech jednotlivě, ale řádky jsou zvektorizovány, tedy se 
+propočítají paralelně a díky čemuž dojde ke zrychlení.
+
+2. Jaká byla dosažena výkonnost v Intel Advisoru pro jednotlivé implementace 
+(v GFLOPS)?
+==============================================================================
+Batch: 43,646 GFLOPS
+Line:  34,674 GFLOPS
+Ref:    0.649 GFLOPS
+Tyto hodnoty byly vyčteny z roofline modelu a odpovídají hodnotám z obrázku 
+eval.png, takže je považuji za korektní.
+
+3. Jaká část kódu byla vektorizována v "Line" implementaci? Vyčteme tuto 
+informaci i u batch kalkulátoru?
+==============================================================================
+V Line implementaci byla provedena vektorizace na dvou smyčkách. 
+První for cyklus připraví reálné a imaginární hodnoty pro daný řádek, který se 
+bude vypočítávat.
+Druhý for cyklus řádek propočítává a je rovněž vektorizován. To je způsobeno 
+užitím direktivy #pragma simd a dalších příznaků, za jejichž pomoci je 
+kompilátor schopný smyčky vektorizovat.
+
+U batch implementace vyčteme prakticky stejné informace. Je zde jediný rozdíl - 
+data nepřipravujeme a neprocházíme pro celé řádky, ale pouze pro menší celky
+řádků. Tedy řádek je rozdělen na části, které se vlezou do cache a díky tomu 
+je výpočet ještě rychlejší, protože zamezíme výpadkům cache (tedy nemusíme 
+přistupovat až do paměti).
+
+4. Co vyčteme z Roofline modelu pro obě vektorizované implementace?
+==============================================================================
+Dokážeme díky němu vyčíst, jak rychlé jsou naše výpočty, co nás brzdí - často 
+časté načítání dat například, díky čemuž se pohybujeme na nižších hodnotách
+osy Y. Naopak osa X nám ukazuje, jak moc opravdu počítáme. Pak jsou zde značeny 
+přímky, které nám říkají, jaké jsou maximální hodnoty pro načítání dat z 
+jednotlivých částí paměti.

@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# My
+\.vscode
+\build
+\build_advisor
+\build_evaluate
