@@ -1,41 +1,142 @@
 Architektury Výpočetních Systémů (AVS 2023)
 Projekt č. 2 (PMC)
-Login: xlogin00
+Login: xjahnf00
 
 Úloha 1: Paralelizace původního řešení
 ===============================================================================
 
 1) Kterou ze smyček (viz zadání) je vhodnější paralelizovat a co způsobuje 
    neefektivitu paralelizaci té druhé?
+   -------
+
+   Máme na výběr ze dvou smyček. První je v metodě marchCubes a druhá v 
+   metodě evaluateFieldAt. Má smysl paralelizovat pouze první smyčku, protože
+   ta je hlavní. Myšleno tak, že se v ní volá buildCube, ve které (i ze které)
+   se vše podstatné vypočítává. 
+   
+   Do druhé smyčky se dostaneme z metody buildCube, a ta pouze vypočítává 
+   minimální čtvercovou vzdálenost. Režie kolem vytvoření vláken je tak mnohem 
+   větší, než výpočet jako takový rovnou provést. Proto je nevýhodné tuto smyčku
+   paralelizovat. 
+
 
 2) Jaké plánování (rozdělení práce mezi vlákna) jste zvolili a proč? 
    Jaký vliv má velikost "chunk" při dynamickém plánování (8, 16, 32, 64)?
+   -------
+
+   Zkoušel jsem oba přístupy a v následujících odstavcích je jednotlivě popíši: 
+   - U statického plánování je práce rozdělena mezi vlákna staticky před spuštěním
+     programu. Každé vlákno dostává předem určený úsek práce.
+     V našem případě se ale každý úsek práce (první smyčka) vykonává jinou dobu. 
+     V některých případech máme vícero počítání než jindy, a proto se více hodí
+     použít dynamické plánování.
+   
+   - U dynamického plánování je práce rozdělena do menších jednotek nazývaných "chunky", 
+     které jsou přidělovány vláknům dynamicky během běhu programu. Má lepší vyvážení 
+     zátěže mezi vlákny a je efektivní v případě, kdy některé úlohy mohou trvat 
+     déle než ostatní. Vytváří ale mnohem větší režii při přidělování úloh, což může zpomalit 
+     program v případě malých úloh, proto by se už vůbec nehodila pro druhou smyčku.
+     Nejlépe mi vycházelo nastavení chunk na 8.
+     Níže jsou průměrné doby běhu pro 10 spuštění.
+   
+   Dynamic:
+      8 - 28ms | 16 - 29ms | 32 - 29ms | 64 - 29ms
+   Static: 
+      1 - 35ms
+
 
 3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+   -------
 
+   Aby nedošlo k zápisu z vícero vláken součastně, využívám pragmu s klauzulí
+   pro kritickou sekci. Tedy pragma omp critical.
 
 Úloha 2: Paralelní průchod stromem
 ===============================================================================
 
 1) Stručně popište použití OpenMP tasků ve vašem řešení.
+   -------
+
+   Pro dělení kostky na osminy jsem vytvořil metodu octreeDecomposition, která
+   rozděluje svou část kostky na další osminky. Je volána v rámci vláken rekurzivně.
+   Začínáme v metodě marchCubes, která jako první zavolá metodu octreeDecomposition
+   s klauzulemi pragmy parallel a single. To kvůli tomu, že zpočátku máme kostku 
+   celou (ve stromu se nacházíme v kořeni) a potřebujeme udělat první dělení.
+   V metodě octreeDecomposition pak dále rozdělujeme krychli, nebo její část,
+   na další osminy. Pokud v té dané části bude co počítat a chceme kostku dále dělit, 
+   využijeme pragma omp task pro zpracování dané části krychle. Mimo klauzuli 
+   pragma omp task připisuji klauzuli shared na proměnnou trianglesCnt, která 
+   drží informaci o počtu vygenerovaných trojúhelníků. Jelikož je proměnná sdílena, 
+   je třeba využít pragma omp atomic, která zajistí korektní a konzistentní zápis.
+   Než se vynoříme z dané metody, vytvářím bariéru užitím pragma omp taskwait, díky
+   čemuž se počká na dokončení všech vláken.
+
 
 2) Jaký vliv má na vaše řešení tzv. "cut-off"? Je vhodné vytvářet nový 
    task pro každou krychli na nejnižší úrovni?
+   -------
+
+   Cut-off hodnota udává minimální velikost hrany, po kterou se může kostka dělit.
+   Délka hrany se s každým dělením zmenšuje o polovinu a cut-off zajišťuje, abychom
+   nedělili do nekonečna. Na nejnižší úrovni již nemá smysl vytvářet nový task.
+   Toto dělení jsme dělali proto, abychom počítali jenom to potřebné. Na nejnižší
+   úrovni už v dané fázi máme pouze jednu krychličku, kterou spočítáme sekvenčně.
+   Zkoušel jsem různé hodnoty cut-off a nejlépe/nejrychleji funguje s hodnotou 1.
+
 
 3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+   -------
+
+   Je to stejné jako v případě loop implementace. Užitím pragma omp critical.
+
 
 Úloha 3: Grafy škálování všech řešení
 ===============================================================================
 
 1) Stručně zhodnoťte efektivitu vytvořených řešení (na základě grafů ŠKÁLOVÁNÍ).
+   -------
+
+   Máme dva grafy - silného a slabého škálování a v obou případech dva grafy - pro
+   loop a tree implementace.
+   
+   - Prvně rozebereme silné škálování. Křivka pro loop je velice pěkně klesající (co
+   to značí je popsáno v podotázce 4) oproti křivce pro tree implementaci. Naopak 
+   ale tree je vždy rychlejší co se výpočtu týče. Zajímavostí je, že pokud zvolíme
+   2^5 vláken, program se zpomalí. To bych řekl že bude velkou režií oproti 
+   výpočetnímu času. Stačí pak méně vláken (2^4 např.), které jsou nejefektivnější. 
+   
+   - V grafu slabého škálování je vidno, že u loop implementace křivka klesá, což
+   naznačuje urychlení výpočtu přidáním dalších vláken. Pro tree to úplně neplatí, 
+   protože křivka je spíše rostoucí.
 
 2) V jakém případě (v závislosti na počtu bodů ve vstupním souboru a velikosti 
    mřížky) bude vaše řešení 1. úlohy neefektivní? (pokud takový případ existuje)
+   -------
+
+   V grafu slabého škálování se podíváme na nejmenší input size a tedy modrou křivku.
+   Křivka dělá jakoby písmeno V, a přidáním až moc vláken se doba výpočtu prodlužuje.
+   Pro malé úkoly s mnoha vlákny je varianta neefektivní. 
 
 3) Je (nebo není) stromový algoritmus efektivnější z pohledu slabého škálování 
    vzhledem ke vstupu?
+   -------
+
+   Určitě ne. Křivka primárně pro menší vstupy je poměrně silně rostoucí a to na 
+   grafu slabého škálování vidět úplně nechceme.
 
 4) Jaký je rozdíl mezi silným a slabým škálováním?
+   -------
+
+   Slabé škálování znamená, že pokud zvýšíme výkon stroje (např. zvětšíme
+   počet vláken), za stejnou dobu se vykoná více práce. Tedy v grafu chceme
+   vidět, že je křivka konstantní, nebo dokonce klesající - výpočet se zrychlí.
+   
+   Silné škálování je pak o tom, že zvýšením výkonu stroje se práce zpracuje
+   o to rychleji. Pokud zvýšíme počet vláken dvounásobně, chtěli bychom,
+   aby se práce provedla rovněž dvakrát rychleji. Jak ale víme, tak to 
+   takto nefunguje. V grafu bychom chtěli vidět klesající přímku (ideálně pak
+   y = -x).
+
 
 Úloha 4: Analýza využití jader pomocí VTune
 ================================================================================
@@ -43,15 +144,21 @@ Login: xlogin00
 1) Jaké bylo průměrné využití jader pro všechny tři implementace s omezením na 
    18 vláken? Na kolik procent byly využity?
    
-   ref:
-   loop:
-   tree:
+   ref:   2.8% (0.997  / 36 logical CPUs)
+   loop: 48.2% (17.351 / 36 logical CPUs)
+   tree: 43.0% (15.479 / 36 logical CPUs)
 
 2) Jaké bylo průměrné využití jader pro všechny tři implementace s využitím 
    všech jader? Na kolik procent se podařilo využít obě CPU?
    
-   ref:
-   loop:
-   tree:
+   ref:   2.8% (0.997  / 36 logical CPUs)
+   loop: 91.3% (32.883 / 36 logical CPUs)
+   tree: 73.9% (26.592 / 36 logical CPUs)
 
 3) Jaké jsou závěry z těchto měření?
+
+   Celkově lze říci, že implementace "loop" byla nejlepší v optimalizaci 
+   využití jader, zejména při plném využití všech dostupných jader. 
+   Implementace "tree" byla také efektivní, ale s nižším využitím jader 
+   než "loop". Implementace "ref" vykazuje nejnižší efektivitu a využívá 
+   pouze malé procento dostupných jader.
