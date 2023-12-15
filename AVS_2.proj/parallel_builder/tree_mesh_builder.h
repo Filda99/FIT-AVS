@@ -5,7 +5,7 @@
  *
  * @brief   Parallel Marching Cubes implementation using OpenMP tasks + octree early elimination
  *
- * @date    DATE
+ * @date    15.12.2023
  **/
 
 #ifndef TREE_MESH_BUILDER_H
